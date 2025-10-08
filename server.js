@@ -10,12 +10,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -61,8 +56,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API-only server - frontend is deployed separately
-// No need to serve static files since frontend is on a separate service
+// Serve static assets if in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('client/build'));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 
