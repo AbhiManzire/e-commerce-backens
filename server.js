@@ -56,14 +56,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve static assets if in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('client/build'));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+// API root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'E-commerce Backend API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      products: '/api/products',
+      users: '/api/users',
+      orders: '/api/orders',
+      payments: '/api/payments'
+    }
   });
-}
+});
 
 const PORT = process.env.PORT || 5000;
 
