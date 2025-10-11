@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -10,12 +11,35 @@ router.get('/', async (req, res) => {
     const pageSize = Number(req.query.pageSize) || 12;
     const page = Number(req.query.pageNumber) || 1;
     
+    // Create flexible search patterns
+    const createSearchPatterns = (searchTerm) => {
+      const patterns = [searchTerm];
+      
+      // Handle common variations
+      if (searchTerm.toLowerCase().includes('tshirt')) {
+        patterns.push(searchTerm.replace(/tshirt/gi, 't-shirt'));
+        patterns.push(searchTerm.replace(/tshirt/gi, 't shirt'));
+      }
+      if (searchTerm.toLowerCase().includes('t-shirt')) {
+        patterns.push(searchTerm.replace(/t-shirt/gi, 'tshirt'));
+        patterns.push(searchTerm.replace(/t-shirt/gi, 't shirt'));
+      }
+      if (searchTerm.toLowerCase().includes('t shirt')) {
+        patterns.push(searchTerm.replace(/t shirt/gi, 'tshirt'));
+        patterns.push(searchTerm.replace(/t shirt/gi, 't-shirt'));
+      }
+      
+      return [...new Set(patterns)]; // Remove duplicates
+    };
+
     const keyword = req.query.keyword
       ? {
-          name: {
-            $regex: req.query.keyword,
-            $options: 'i',
-          },
+          $or: createSearchPatterns(req.query.keyword).map(pattern => ({
+            name: {
+              $regex: pattern,
+              $options: 'i',
+            },
+          }))
         }
       : {};
 
@@ -121,9 +145,12 @@ router.get('/:id', async (req, res) => {
 // @desc    Create a product
 // @route   POST /api/products
 // @access  Private/Admin
-router.post('/', async (req, res) => {
+router.post('/', protect, admin, async (req, res) => {
   try {
-    const product = new Product(req.body);
+    const product = new Product({
+      ...req.body,
+      user: req.user._id
+    });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
   } catch (error) {
@@ -134,18 +161,21 @@ router.post('/', async (req, res) => {
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, admin, async (req, res) => {
   try {
+    console.log('🔄 Updating product:', req.params.id, 'with data:', req.body);
     const product = await Product.findById(req.params.id);
 
     if (product) {
       Object.assign(product, req.body);
       const updatedProduct = await product.save();
+      console.log('✅ Product updated successfully:', updatedProduct._id);
       res.json(updatedProduct);
     } else {
       res.status(404).json({ message: 'Product not found' });
     }
   } catch (error) {
+    console.error('❌ Update product error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -153,18 +183,19 @@ router.put('/:id', async (req, res) => {
 // @desc    Delete a product
 // @route   DELETE /api/products/:id
 // @access  Private/Admin
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, admin, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
 
     if (product) {
-      await product.remove();
+      await Product.findByIdAndDelete(req.params.id);
       res.json({ message: 'Product removed' });
     } else {
       res.status(404).json({ message: 'Product not found' });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Server Error' });
+    console.error('❌ Delete product error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
   }
 });
 
